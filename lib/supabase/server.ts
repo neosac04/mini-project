@@ -1,27 +1,67 @@
-import { createServerClient } from "@supabase/ssr"
+import { createServerClient as createSupabaseServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
-export function createServerSupabaseClient() {
-  const cookieStore = cookies()
+type CookieOptions = {
+  name: string
+  value: string
+  httpOnly?: boolean
+  path?: string
+  secure?: boolean
+  sameSite?: 'lax' | 'strict' | 'none'
+  maxAge?: number
+  expires?: Date
+}
 
-  NEXT_PUBLIC_SUPABASE_URL=https://lpfznawizaugohscfxnq.supabase.co
-  NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwZnpuYXdpemF1Z29oc2NmeG5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY4OTQxNTAsImV4cCI6MjA2MjQ3MDE1MH0._5r2WlJqZd-RB1tPPETZlknaQ-liXerGV5n25Nqnn04  
+type CookieMethods = {
+  get: (name: string) => Promise<string | undefined>
+  set: (name: string, value: string, options?: Partial<CookieOptions>) => Promise<void>
+  remove: (name: string, options?: Partial<CookieOptions>) => Promise<void>
+}
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn("Supabase environment variables are not set")
+export async function createServerSupabaseClient() {
+  try {
+    const cookieStore = cookies()
+    
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('Missing Supabase environment variables')
+      return null
+    }
+
+    // Create a simple cookie handler that works with Next.js 13+
+    const cookieHandler: CookieMethods = {
+      get: async (name) => {
+        return (await cookieStore).get(name)?.value
+      },
+      set: async (name, value, options = {}) => {
+        try {
+          // In Next.js 13+, we can't modify cookies in layout or page components
+          // This will only work in Server Actions or Route Handlers
+          ;(await cookieStore).set({ name, value, ...options } as any)
+        } catch (error) {
+          console.warn('Could not set cookie (this is expected in some contexts):', error)
+        }
+      },
+      remove: async (name, options = {}) => {
+        try {
+          ;(await cookieStore).set({ name, value: '', ...options } as any)
+        } catch (error) {
+          console.warn('Could not remove cookie (this is expected in some contexts):', error)
+        }
+      },
+    }
+
+    return createSupabaseServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        get: (name) => cookieHandler.get(name).then(value => value || ''),
+        set: (name, value, options) => cookieHandler.set(name, value, options as any),
+        remove: (name, options) => cookieHandler.remove(name, options as any),
+      },
+    })
+  } catch (error) {
+    console.error('Error creating Supabase client:', error)
+    return null
   }
-
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value
-      },
-      set(name: string, value: string, options: any) {
-        cookieStore.set({ name, value, ...options })
-      },
-      remove(name: string, options: any) {
-        cookieStore.set({ name, value: "", ...options })
-      },
-    },
-  })
 }

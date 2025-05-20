@@ -5,13 +5,13 @@ import { isSupabaseConfigured } from "@/lib/supabase/client"
 
 export default async function Home() {
   try {
-    const supabase = createServerSupabaseClient()
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (session) {
-      redirect("/dashboard")
+    const supabase = await createServerSupabaseClient()
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session) {
+        redirect("/dashboard")
+      }
     }
   } catch (error) {
     console.error("Error checking session:", error)
