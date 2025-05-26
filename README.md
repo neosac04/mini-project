@@ -11,3 +11,4 @@ uvicorn main:app --reload          # Start the FastAPI server
 cd /Users/nsac/Projects/MiniProject/mini-project
 npm install
 npm run dev
+
